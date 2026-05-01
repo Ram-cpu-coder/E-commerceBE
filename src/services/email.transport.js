@@ -1,14 +1,22 @@
-import nodemailer from "nodemailer"
+import nodemailer from "nodemailer";
+
+let transporter;
+
 export const eTransporter = () => {
-    const transporter = nodemailer.createTransport({
-        // service: "gmail",
-        host: process.env.SMTP_HOST,
-        port: +process.env.SMTP_PORT,
-        secure: false,
-        auth: {
-            user: process.env.SMTP_EMAIL,
-            pass: process.env.SMTP_PASS,
-        },
-    })
+    if (!transporter) {
+        transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: Number(process.env.SMTP_PORT),
+            secure: Number(process.env.SMTP_PORT) === 465,
+            auth: {
+                user: process.env.SMTP_EMAIL,
+                pass: process.env.SMTP_PASS,
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 10000,
+        });
+    }
+
     return transporter;
-}
+};

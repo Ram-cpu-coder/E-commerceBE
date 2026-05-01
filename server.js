@@ -77,14 +77,14 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", uptime: process.uptime() });
 });
 
-app.use("/api/v1/auth", apiLimiter, authRouter);
-app.use("/api/v1/review", apiLimiter, reviewRouter);
-app.use("/api/v1/orders", apiLimiter, orderRouter);
-app.use("/api/v1/cart", apiLimiter, cartRouter);
-app.use("/api/v1/payment", apiLimiter, paymentRouter);
-app.use("/api/v1/wishlist", apiLimiter, wishListRouter);
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/review", reviewRouter);
+app.use("/api/v1/orders", orderRouter);
+app.use("/api/v1/cart", cartRouter);
+app.use("/api/v1/payment", paymentRouter);
+app.use("/api/v1/wishlist", wishListRouter);
 // verifying error
-app.use("/verify-user", apiLimiter, verifyEmailRouter);
+app.use("/verify-user", verifyEmailRouter);
 
 
 app.use("/api/v1/products", productRouter);
