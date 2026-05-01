@@ -32,20 +32,26 @@ const AuthSession = new mongoose.Schema(
     }, { timestamps: true })
 
 // otp sessionSchema
-const OtpSession = new mongoose.Schema({
-    Otp: {
-        type: Number,
-        required: true
-    },
-    associate: {
-        type: String,
-        required: true,
-    },
-    expiresAt:
+const OtpSession = new mongoose.Schema(
     {
-        type: Date, default: new Date(Date.now() + 3600000), expires: 0
+        Otp: {
+            type: String,
+            required: true,
+        },
+        associate: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+        },
+        expiresAt: {
+            type: Date,
+            default: () => new Date(Date.now() + 10 * 60 * 1000),
+            expires: 0,
+        },
     },
-})
+    { timestamps: true }
+);
 
 export const SessionSchema = mongoose.model("session", Session)
 export const AuthSessionSchema = mongoose.model("authSession", AuthSession)

@@ -9,50 +9,86 @@ import { getUserByEmail, updateUser } from "../models/users/user.model.js";
 import { OTPemail } from "../services/email.service.js";
 import { comparePassword, encryptPassword } from "../utils/bcrypt.js";
 
+const generateOTP = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
 export const verifyAndUpdatePw = async (req, res, next) => {
     try {
-        const { email, Otp, password, confirmPassword } = req.body
-        console.log(req.body)
+        const { email, Otp, password, confirmPassword } = req.body;
 
-        if (password !== confirmPassword) {
-            return next({
-                statusCode: 404,
-                message: "Password and Confirm Password didnt match !!!",
-                errorMessage: "Password and Confirm Password didnt match!",
+        if (!email || !Otp || !password || !confirmPassword) {
+            return res.status(400).json({
+                status: "error",
+                message: "Email, OTP, password and confirm password are required.",
             });
         }
-        const user = await getUserByEmail({ email: email })
-        console.log(user, "user")
-        const isPasswordSame = await comparePassword(password, user.password)
-        if (isPasswordSame) {
+
+        if (password !== confirmPassword) {
+            return res.status(400).json({
+                status: "error",
+                message: "Password and confirm password do not match.",
+            });
+        }
+
+        const user = await getUserByEmail({ email });
+
+        if (!user) {
             return res.status(404).json({
                 status: "error",
-                message: "Old Password!"
-            })
+                message: "User not found.",
+            });
         }
-        console.log(isPasswordSame, 57)
 
+        const foundOtp = await findOTP({
+            Otp: String(Otp),
+            associate: email,
+        });
+
+        if (!foundOtp) {
+            return res.status(400).json({
+                status: "error",
+                message: "Invalid or expired OTP.",
+            });
+        }
+
+        const isPasswordSame = await comparePassword(password, user.password);
+
+        if (isPasswordSame) {
+            return res.status(400).json({
+                status: "error",
+                message: "New password cannot be the same as old password.",
+            });
+        }
+
+        // Same encryption method used in registration
         const encryptedPassword = await encryptPassword(password);
 
-        // console.log(encrypting, "encrypted")
+        const updatedUser = await updateUser(
+            { email },
+            {
+                password: encryptedPassword,
+                refreshJWT: "",
+            }
+        );
 
-        const FoundOtp = await findOTP({ Otp: Otp })
-        console.log(FoundOtp)
-        if (FoundOtp.associate === email) {
-            const updateUserData = await updateUser({ email: email }, {
-                password: encryptedPassword
-            })
-            await findOTPAndDelete({ Otp: Otp })
-        }
+        await findOTPAndDelete({
+            Otp: String(Otp),
+            associate: email,
+        });
+
+        updatedUser.password = "";
+        updatedUser.refreshJWT = "";
 
         return res.status(200).json({
             status: "success",
-            message: "Password has been changed !"
+            message: "Password has been changed successfully.",
+            updatedUser,
         });
     } catch (error) {
         next({
             statusCode: 500,
-            message: "Could not change the password!",
+            message: "Could not change the password.",
             errorMessage: error.message,
         });
     }
@@ -60,155 +96,166 @@ export const verifyAndUpdatePw = async (req, res, next) => {
 
 export const verifyEmail = async (req, res, next) => {
     try {
-        const user = await getUserByEmail(req.body)
-        req.userData = req.body
-        if (!user) {
+        const { email } = req.body;
+
+        if (!email) {
             return res.status(400).json({
                 status: "error",
-                message: "User is not Found!"
-            })
-        }
-        if (user.verified === false) {
-            return res.status(404).json({
-                status: "error",
-                message: "Activate your account first!"
-            })
+                message: "Email is required.",
+            });
         }
 
-        next()
+        const user = await getUserByEmail({ email });
+
+        if (!user) {
+            return res.status(404).json({
+                status: "error",
+                message: "User was not found.",
+            });
+        }
+
+        if (!user.verified) {
+            return res.status(400).json({
+                status: "error",
+                message: "Activate your account first.",
+            });
+        }
+
+        req.userData = { email };
+        next();
     } catch (error) {
         next({
             statusCode: 500,
-            message: "User not Found!",
+            message: "User lookup failed.",
             errorMessage: error.message,
         });
     }
-}
+};
 
 export const sendOTP = async (req, res, next) => {
     try {
-        const generateRandomNumber = () => {
-            const string = "1234567890"
-            const len = 6;
-            let Otp = ""
-            for (let i = 1; i <= len; i++) {
-                const randomIndex = Math.floor(Math.random() * string.length)
-                Otp += string[randomIndex]
-            }
-            return Otp;
-        }
-
-        const OTP = generateRandomNumber();
         const email = req.userData.email;
-        const user = await getUserByEmail({ email: email })
-        const userName = user.fName;
-        await insertOTP({ Otp: OTP, associate: email });
-        const obj = {
+        const user = await getUserByEmail({ email });
+
+        const OTP = generateOTP();
+
+        // Remove old OTPs for this email before creating a new one
+        await findOTPAndDelete({ associate: email });
+
+        await insertOTP({
+            Otp: OTP,
+            associate: email,
+        });
+
+        await OTPemail({
             OTP,
             email,
-            userName
-        }
-        const data = await OTPemail(obj)
+            userName: user.fName,
+        });
+
         return res.status(200).json({
             status: "success",
-            message: "OTP has been sent successfully to your email!"
-        })
+            message: "OTP has been sent successfully to your email.",
+        });
     } catch (error) {
         next({
             statusCode: 500,
             errorMessage: error.message,
-            message: "OTP could not be sent!"
-        })
+            message: "OTP could not be sent.",
+        });
     }
-}
+};
 
-// verifying the OTP 
 export const verifyOTP = async (req, res, next) => {
     try {
-        const { email, Otp } = req.body
-        const foundOtp = await findOTP({ Otp: Otp })
-        // console.log(foundOtp.associate)
-        // console.log(email)
-        if (!foundOtp) {
-            next({
-                statusCode: 400,
-                message: "Invalid OTP!"
-            })
-        }
-        if (foundOtp.associate !== email) {
-            return res.status(404).json({
+        const { email, Otp } = req.body;
+
+        if (!email || !Otp) {
+            return res.status(400).json({
                 status: "error",
-                message: "Invalid OTP!"
-            })
+                message: "Email and OTP are required.",
+            });
         }
 
-        await findOTPAndDelete(req.body)
+        const foundOtp = await findOTP({
+            Otp: String(Otp),
+            associate: email,
+        });
 
+        if (!foundOtp) {
+            return res.status(400).json({
+                status: "error",
+                message: "Invalid or expired OTP.",
+            });
+        }
 
+        // Do NOT delete OTP here.
+        // It must still exist when password update happens.
         return res.status(200).json({
             status: "success",
-            message: "OTP verified!"
-        })
-
+            message: "OTP verified.",
+        });
     } catch (error) {
         next({
             statusCode: 500,
-            message: "Verification failed",
+            message: "Verification failed.",
             errorMessage: error.message,
         });
     }
-}
+};
 
 export const verifyUser = async (req, res, next) => {
     try {
         const sessionId = req.query.sessionId;
         const token = req.query.t;
 
-        console.log(sessionId, token)
         if (!sessionId || !token) {
             return next({
                 statusCode: 404,
-                message: "Invalid verification Link !!!",
-                errorMessage: "No Session Id or No token",
+                message: "Invalid verification link.",
+                errorMessage: "No session ID or token.",
             });
         }
 
         const session = await findAuthSessionById(sessionId);
 
-        console.log(session)
-
         if (!session || session.token !== token) {
             return next({
                 statusCode: 404,
-                message: "Invalid or expired session !!!",
-                errorMessage: "Invalid or expired session !!!",
+                message: "Invalid or expired session.",
+                errorMessage: "Invalid or expired session.",
             });
         }
 
-        // marking the user as verified
         const userEmail = session.associate;
-        // find the user
         const user = await getUserByEmail({ email: userEmail });
-        console.log(user)
+
         if (!user) {
             return next({
                 statusCode: 404,
-                message: "Verification failed!!!",
-                errorMessage: "No user found with such email!",
+                message: "Verification failed.",
+                errorMessage: "No user found with such email.",
             });
         }
-        const update = await updateUser({ email: userEmail }, { verified: true })
-        if (update) { await findAuthSessionByIdandDelete({ _id: sessionId }) }
-        console.log(update)
+
+        const updatedUser = await updateUser(
+            { email: userEmail },
+            { verified: true }
+        );
+
+        if (updatedUser) {
+            await findAuthSessionByIdandDelete(sessionId);
+        }
+
         return res.status(200).json({
             status: "success",
-            message: "Verification Successful!"
-        })
+            message: "Verification successful.",
+        });
     } catch (error) {
         next({
             statusCode: 500,
-            message: "Verification failed",
+            message: "Verification failed.",
             errorMessage: error.message,
         });
     }
-}
+};
