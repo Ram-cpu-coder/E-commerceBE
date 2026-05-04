@@ -138,6 +138,7 @@ export const sendOTP = async (req, res, next) => {
         const user = await getUserByEmail({ email });
 
         const OTP = generateOTP();
+        console.log(OTP, "OTP")
 
         // Remove old OTPs for this email before creating a new one
         await findOTPAndDelete({ associate: email });
