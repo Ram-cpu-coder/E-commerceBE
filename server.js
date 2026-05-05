@@ -22,9 +22,6 @@ import { errorHandler } from "./src/middlewares/error.handler.js";
 import { startCronJobs } from "./src/utils/cronsJobs.js";
 import { apiLimiter } from "./src/services/rateLimiter.js";
 
-// in your main server/app file, after middleware setup
-import { eTransporter } from "./src/services/email.transport.js";
-
 const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT;
@@ -58,36 +55,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"], // allowed headers
   })
 );
-
-// debugging
-
-app.get("/smtp-test", async (req, res) => {
-  try {
-    console.log("SMTP_HOST:", process.env.SMTP_HOST);
-    console.log("SMTP_PORT:", process.env.SMTP_PORT);
-    console.log("SMTP_EMAIL:", process.env.SMTP_EMAIL);
-    console.log("SMTP_PASS_LENGTH:", process.env.SMTP_PASS?.length);
-
-    const transporter = eTransporter();
-
-    await transporter.verify();
-
-    res.json({
-      status: "success",
-      message: "SMTP connection verified",
-    });
-  } catch (error) {
-    console.error("SMTP TEST FAILED:", error);
-
-    res.status(500).json({
-      status: "error",
-      message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-    });
-  }
-});
 
 // Explicitly handle preflight OPTIONS requests
 app.options("*", cors());

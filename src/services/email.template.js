@@ -2,7 +2,7 @@
 // user activation email
 export const userActivatedEmailTempalate = ({ email, userName, url }) => {
   return ({
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_EMAIL}>`, // sender address
+    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`, // sender address
     to: email, // list of receivers
     subject: "Action Required! Activate your Account!", // Subject line
     text: `Click the url to activate your Account. ${url}`, // plain text body
@@ -23,7 +23,7 @@ export const userActivatedEmailTempalate = ({ email, userName, url }) => {
 
 export const OTPemailTemplate = ({ OTP, userName, email }) => {
   return ({
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_EMAIL}>`,
+    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
     to: email,
     subject: "Your single-use code",
     html: `<div style="max-width: 600px; margin: auto; text-align: center; font-family: Arial, sans-serif;">
@@ -47,7 +47,7 @@ export const orderCreated = ({ userName, email, order, attachments = [] }) => {
   console.log("email being sent 1");
 
   return {
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_EMAIL}>`,
+    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
     to: email,
     subject: `Order Placed Successfully - Order # ${order._id}`,
     html: `
@@ -92,7 +92,7 @@ export const orderCreated = ({ userName, email, order, attachments = [] }) => {
 
         <p style="margin-top: 20px;">
           If you have any questions or need to make changes, feel free to reach out to our support team at 
-          <a href="mailto:${process.env.SMTP_EMAIL}">${process.env.SMTP_EMAIL}</a>.
+          <a href="mailto:${process.env.SMTP_FROM}">${process.env.SMTP_FROM}</a>.
         </p>
 
         <p style="margin: 0;">Thanks for choosing ${process.env.COMPANY_NAME} – we appreciate your business!</p>
@@ -108,7 +108,7 @@ export const orderCreated = ({ userName, email, order, attachments = [] }) => {
 
 // export const orderShipped = ({ userName, email, order }) => {
 //   return {
-//     from: `${process.env.COMPANY_NAME} <${process.env.SMTP_EMAIL}>`,
+//     from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
 //     to: email,
 //     subject: `Your Order Has ${order.status.toUpperCase()} – Order #${order._id}`,
 //     html: `
@@ -159,7 +159,7 @@ export const orderCreated = ({ userName, email, order, attachments = [] }) => {
 //         : ''
 //       }
 
-//         <p style="margin-top: 20px;">If you have any questions, reach out to us at <a href="mailto:${process.env.SMTP_EMAIL}">${process.env.SMTP_EMAIL}</a>.</p>
+//         <p style="margin-top: 20px;">If you have any questions, reach out to us at <a href="mailto:${process.env.SMTP_FROM}">${process.env.SMTP_FROM}</a>.</p>
 //         <p>Thanks again for shopping with ${process.env.COMPANY_NAME}!</p>
 //         <p><strong>${process.env.COMPANY_NAME}</strong></p>
 //       </div>
@@ -169,7 +169,7 @@ export const orderCreated = ({ userName, email, order, attachments = [] }) => {
 
 // export const orderDelivered = ({ userName, email, order }) => {
 //   return {
-//     from: `${process.env.COMPANY_NAME} <${process.env.SMTP_EMAIL}>`,
+//     from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
 //     to: email,
 //     subject: `Your Order Has Been Delivered – Order #${order._id}`,
 //     html: `
@@ -213,7 +213,7 @@ export const orderCreated = ({ userName, email, order, attachments = [] }) => {
 
 //     <p style="margin-top: 20px;">We hope you're enjoying your purchase! If you have any issues or feedback, please don't hesitate to reach out.</p>
 
-//     <p>Contact us at <a href="mailto:${process.env.SMTP_EMAIL}">${process.env.SMTP_EMAIL}</a>.</p>
+//     <p>Contact us at <a href="mailto:${process.env.SMTP_FROM}">${process.env.SMTP_FROM}</a>.</p>
 //     <p>Thanks again for choosing ${process.env.COMPANY_NAME}!</p>
 //     <p><strong>${process.env.COMPANY_NAME}</strong></p>
 //   </div>
@@ -223,7 +223,7 @@ export const orderCreated = ({ userName, email, order, attachments = [] }) => {
 
 export const orderUpdate = ({ userName, email, order }) => {
   return {
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_EMAIL}>`,
+    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
     to: email,
     subject: `Your Order is ${order.status.toUpperCase()} – Order #${order._id}`,
     html: `
@@ -274,7 +274,7 @@ export const orderUpdate = ({ userName, email, order }) => {
         : ''
       }
 
-        <p style="margin-top: 20px;">If you have any questions, reach out to us at <a href="mailto:${process.env.SMTP_EMAIL}">${process.env.SMTP_EMAIL}</a>.</p>
+        <p style="margin-top: 20px;">If you have any questions, reach out to us at <a href="mailto:${process.env.SMTP_FROM}">${process.env.SMTP_FROM}</a>.</p>
         <p>Thanks again for shopping with ${process.env.COMPANY_NAME}!</p>
         <p><strong>${process.env.COMPANY_NAME}</strong></p>
       </div>
@@ -286,8 +286,8 @@ export const inquiryForm = ({ customer_name, customer_email, customer_message, o
   const orderInquirySub = `Order Inquiry - Order #${orderNumber || "N/A"}`
   const normalInquirySub = `Inquiry`
   return {
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_EMAIL}>`,
-    to: process.env.SMTP_EMAIL,
+    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
+    to: process.env.SMTP_FROM,
     replyTo: customer_email,
     subject: orderNumber ? orderInquirySub : normalInquirySub,
     text: `
