@@ -12,9 +12,10 @@ export const eTransporter = () => {
                 user: process.env.SMTP_EMAIL,
                 pass: process.env.SMTP_PASS,
             },
-            connectionTimeout: 30000,
-            greetingTimeout: 30000,
-            socketTimeout: 30000,
+
+            // connectionTimeout: 30000,
+            // greetingTimeout: 30000,
+            // socketTimeout: 30000,
         });
     }
 
