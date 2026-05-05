@@ -47,23 +47,28 @@ export const registerUserController = async (req, res, next) => {
       });
     }
     const url = `${process.env.ROOT_URL}/verify-user?sessionId=${session._id}&t=${session.token}`;
+    // email
+    let emailSent = true;
+
     try {
       await userActivatedEmail({
         email: user.email,
         userName: user.fName,
         url,
       });
-    } catch (emailError) {
-      console.error("Activation email failed:", emailError.message);
-
-      return res.status(201).json({
-        status: "success",
-        message:
-          "Account created, but activation email could not be sent. Please use resend verification email.",
-        user,
-        emailSent: false,
-      });
+    } catch (error) {
+      emailSent = false;
+      console.error("Activation email failed:", error.message);
     }
+
+    return res.status(201).json({
+      status: "success",
+      message: emailSent
+        ? "Account created. Please check your email to activate your account."
+        : "Account created, but activation email could not be sent. Please use resend verification.",
+      user,
+      emailSent,
+    });
 
     return res.status(200).json({
       status: "success",

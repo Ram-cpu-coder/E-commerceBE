@@ -1,47 +1,35 @@
+// email.template.js
 
-// user activation email
-export const userActivatedEmailTempalate = ({ email, userName, url }) => {
-  return ({
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`, // sender address
-    to: email, // list of receivers
-    subject: "Action Required! Activate your Account!", // Subject line
-    text: `Click the url to activate your Account. ${url}`, // plain text body
-    html: `<div style="max-width: 600px; margin: auto; text-align: center; font-family: Arial, sans-serif;">
-        <h1>Hello, ${userName}</h1>
-            <br />
-            <p style ="margin: 0">Your account has been created. Click the button to Activate your account.</p>
-            <a href=${url}><button style="color: white; background : blue; padding: 1rem; border-radius: 10px;">Activate Now</button></a>
-            <br />
-            <br />
-            <p style ="margin: 0">Regards,</p>
-            <p style ="margin: 0">Ram</p>
-            <p style ="margin: 0">Manager</p>
-            <p style ="margin: 0">${process.env.COMPANY_NAME}</p>
-        </div>`, // html body
-  });
-}
+export const userActivatedEmailTempalate = ({ email, userName, url }) => ({
+  subject: "Action Required! Activate your Account!",
+  text: `Click the url to activate your Account. ${url}`,
+  html: `<div style="max-width: 600px; margin: auto; text-align: center; font-family: Arial, sans-serif;">
+    <h1>Hello, ${userName}</h1>
+    <p>Your account has been created. Click the button to activate your account.</p>
+    <a href="${url}">
+      <button style="color: white; background: blue; padding: 1rem; border-radius: 10px;">
+        Activate Now
+      </button>
+    </a>
+    <br/><br/>
+    <p>Regards,</p>
+    <p>${process.env.COMPANY_NAME}</p>
+  </div>`,
+});
 
-export const OTPemailTemplate = ({ OTP, userName, email }) => {
-  return ({
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
-    to: email,
-    subject: "Your single-use code",
-    html: `<div style="max-width: 600px; margin: auto; text-align: center; font-family: Arial, sans-serif;">
-        <h1>Hello, ${userName}</h1>
-            <br />
-            <p>Verification Code</p>
-           <div>
-            <p style ="margin: 0">Please use the verification code below to update youer new password.</p>
-             <strong style="font-size: 130%">${OTP}</strong>
-              <p style ="margin: 0">If you didn’t request this, you can ignore this email.</p>
-            </div>
-            <br />
-            <br />
-            <p style ="margin: 0">Regards,</p>
-            <p style ="margin: 0">${process.env.COMPANY_NAME}</p>
-        </div>`,
-  })
-}
+export const OTPemailTemplate = ({ OTP, userName }) => ({
+  subject: "Your verification code",
+  text: `Your OTP is ${OTP}`,
+  html: `<div style="max-width: 600px; margin: auto; text-align: center; font-family: Arial, sans-serif;">
+    <h1>Hello, ${userName}</h1>
+    <p>Your OTP Code</p>
+    <strong style="font-size: 150%">${OTP}</strong>
+    <p>If you didn’t request this, ignore this email.</p>
+    <br/><br/>
+    <p>Regards,</p>
+    <p>${process.env.COMPANY_NAME}</p>
+  </div>`,
+});
 
 export const orderCreated = ({ userName, email, order, attachments = [] }) => {
   console.log("email being sent 1");
