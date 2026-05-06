@@ -7,8 +7,10 @@ import {
 } from "./email.template.js";
 import { eTransporter } from "./email.transport.js";
 
+const getEnv = (key) => process.env[key]?.trim();
+
 const getFromAddress = () => {
-    const fromEmail = process.env.SMTP_FROM?.trim();
+    const fromEmail = getEnv("SMTP_FROM");
 
     if (!fromEmail) {
         throw new Error("SMTP_FROM is not configured");
@@ -17,11 +19,47 @@ const getFromAddress = () => {
     return `${process.env.COMPANY_NAME || "NepaStore"} <${fromEmail}>`;
 };
 
-const sendEmail = async ({ to, subject, html, text }) => {
-    if (!to) {
-        throw new Error("Email recipient is required");
+const sendBrevoApiEmail = async ({ to, subject, html, text }) => {
+    const apiKey = getEnv("BREVO_API_KEY");
+    const fromEmail = getEnv("SMTP_FROM");
+
+    if (!apiKey) {
+        return null;
     }
 
+    if (!fromEmail) {
+        throw new Error("SMTP_FROM is not configured");
+    }
+
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+            accept: "application/json",
+            "api-key": apiKey,
+            "content-type": "application/json",
+        },
+        body: JSON.stringify({
+            sender: {
+                name: process.env.COMPANY_NAME || "NepaStore",
+                email: fromEmail,
+            },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html,
+            textContent: text || "",
+        }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(data.message || `Brevo API email failed with status ${response.status}`);
+    }
+
+    return data.messageId;
+};
+
+const sendSmtpEmail = async ({ to, subject, html, text }) => {
     const info = await eTransporter().sendMail({
         from: getFromAddress(),
         to,
@@ -31,6 +69,16 @@ const sendEmail = async ({ to, subject, html, text }) => {
     });
 
     return info.messageId;
+};
+
+const sendEmail = async ({ to, subject, html, text }) => {
+    if (!to) {
+        throw new Error("Email recipient is required");
+    }
+
+    const apiMessageId = await sendBrevoApiEmail({ to, subject, html, text });
+
+    return apiMessageId || sendSmtpEmail({ to, subject, html, text });
 };
 
 // Activation email
