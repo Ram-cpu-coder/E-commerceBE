@@ -58,7 +58,13 @@ export const registerUserController = async (req, res, next) => {
       });
     } catch (error) {
       emailSent = false;
-      console.error("Activation email failed:", error.message);
+      console.error("Activation email failed:", {
+        message: error.message,
+        code: error.code,
+        command: error.command,
+        responseCode: error.responseCode,
+        response: error.response,
+      });
     }
 
     return res.status(201).json({

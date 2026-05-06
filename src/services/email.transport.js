@@ -2,16 +2,20 @@ import nodemailer from "nodemailer";
 
 let transporter;
 
+const getEnv = (key) => process.env[key]?.trim();
+
 export const eTransporter = () => {
     if (!transporter) {
+        const port = Number(getEnv("SMTP_PORT"));
+
         transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: false,
-            requireTLS: true,
+            host: getEnv("SMTP_HOST"),
+            port,
+            secure: port === 465,
+            requireTLS: port === 587,
             auth: {
-                user: process.env.SMTP_EMAIL,
-                pass: process.env.SMTP_PASS,
+                user: getEnv("SMTP_EMAIL"),
+                pass: getEnv("SMTP_PASS"),
             },
             connectionTimeout: 10000,
             greetingTimeout: 10000,

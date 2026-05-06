@@ -8,7 +8,7 @@ import {
 import { eTransporter } from "./email.transport.js";
 
 const getFromAddress = () => {
-    const fromEmail = process.env.SMTP_FROM;
+    const fromEmail = process.env.SMTP_FROM?.trim();
 
     if (!fromEmail) {
         throw new Error("SMTP_FROM is not configured");
