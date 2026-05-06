@@ -1,44 +1,43 @@
-
 import {
     userActivatedEmailTempalate,
     OTPemailTemplate,
+    orderCreated,
+    orderUpdate,
+    inquiryForm,
 } from "./email.template.js";
+import { eTransporter } from "./email.transport.js";
 
-const sendBrevoEmail = async ({ to, subject, html, text }) => {
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: {
-            accept: "application/json",
-            "api-key": process.env.BREVO_API_KEY,
-            "content-type": "application/json",
-        },
-        body: JSON.stringify({
-            sender: {
-                name: process.env.COMPANY_NAME || "NepaStore",
-                email: process.env.EMAIL_FROM,
-            },
-            to: [{ email: to }],
-            subject,
-            htmlContent: html,
-            textContent: text || "",
-        }),
-    });
+const getFromAddress = () => {
+    const fromEmail = process.env.SMTP_FROM;
 
-    const data = await response.json();
-
-    if (!response.ok) {
-        console.error("Brevo Error:", data);
-        throw new Error(data.message || "Brevo email failed");
+    if (!fromEmail) {
+        throw new Error("SMTP_FROM is not configured");
     }
 
-    return data;
+    return `${process.env.COMPANY_NAME || "NepaStore"} <${fromEmail}>`;
 };
 
-// ✅ Activation email
+const sendEmail = async ({ to, subject, html, text }) => {
+    if (!to) {
+        throw new Error("Email recipient is required");
+    }
+
+    const info = await eTransporter().sendMail({
+        from: getFromAddress(),
+        to,
+        subject,
+        html,
+        text,
+    });
+
+    return info.messageId;
+};
+
+// Activation email
 export const userActivatedEmail = async (obj) => {
     const { subject, html, text } = userActivatedEmailTempalate(obj);
 
-    return sendBrevoEmail({
+    return sendEmail({
         to: obj.email,
         subject,
         html,
@@ -46,11 +45,11 @@ export const userActivatedEmail = async (obj) => {
     });
 };
 
-// ✅ OTP email
+// OTP email
 export const OTPemail = async (obj) => {
     const { subject, html, text } = OTPemailTemplate(obj);
 
-    return sendBrevoEmail({
+    return sendEmail({
         to: obj.email,
         subject,
         html,
@@ -58,23 +57,22 @@ export const OTPemail = async (obj) => {
     });
 };
 
-
 export const createOrderEmail = async (obj) => {
-    const info = await eTransporter().sendMail(orderCreated(obj))
+    const info = await eTransporter().sendMail(orderCreated(obj));
     return info.messageId;
-}
+};
 
 export const shipOrderEmail = async (obj) => {
-    const info = await eTransporter().sendMail(orderUpdate(obj))
+    const info = await eTransporter().sendMail(orderUpdate(obj));
     return info.messageId;
-}
+};
 
 export const deliveredOrderEmail = async (obj) => {
-    const info = await eTransporter().sendMail(orderUpdate(obj))
+    const info = await eTransporter().sendMail(orderUpdate(obj));
     return info.messageId;
-}
+};
 
 export const inquiryFormEmail = async (obj) => {
-    const info = await eTransporter().sendMail(inquiryForm(obj))
+    const info = await eTransporter().sendMail(inquiryForm(obj));
     return info.messageId;
-}
+};
