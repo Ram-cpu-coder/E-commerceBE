@@ -11,11 +11,8 @@ import { getPaginatedData, getPaginatedDataFilter } from "../utils/Pagination.js
 
 export const createProduct = async (req, res, next) => {
   try {
-    const imageUrls = req.files?.map((file) => file.path); // Cloudinary URLs
-    // const imageUrls = req.files?.map((file) => file);
+    const imageUrls = req.files?.map((file) => file.path);
     req.body.images = imageUrls;
-    console.log(imageUrls, "image urls")
-    console.log(req.files, "object sending to create product")
 
     const product = await createNewPoductDB(req.body);
 
@@ -27,7 +24,6 @@ export const createProduct = async (req, res, next) => {
       });
     }
   } catch (error) {
-    console.log(error.message)
     next({
       statusCode: 500,
       message: "Error while adding the Product",
@@ -35,10 +31,10 @@ export const createProduct = async (req, res, next) => {
     });
   }
 };
-// with pagination
+
 export const getAllProducts = async (req, res, next) => {
   try {
-    const products = await getPaginatedData(Product, req)
+    const products = await getPaginatedData(Product, req);
 
     if (products) {
       return res.status(200).json({
@@ -46,12 +42,11 @@ export const getAllProducts = async (req, res, next) => {
         message: "All products fetched",
         products,
       });
-    } else {
-      return res.status(400).json({
-        status: "error",
-        message: "No Products Listed!",
-      });
     }
+    return res.status(400).json({
+      status: "error",
+      message: "No Products Listed!",
+    });
   } catch (error) {
     next({
       statusCode: 500,
@@ -60,20 +55,19 @@ export const getAllProducts = async (req, res, next) => {
     });
   }
 };
-// acc to the pagination
+
 export const getPublicProducts = async (req, res, next) => {
   try {
-    const products = await getPaginatedDataFilter(Product, req, { status: "active" })
+    const products = await getPaginatedDataFilter(Product, req, {
+      status: "active",
+    });
 
-    if (products) {
-      return res.status(200).json({
-        status: "success",
-        message: "All products fetched",
-        products,
-      });
-    }
+    return res.status(200).json({
+      status: "success",
+      message: "All products fetched",
+      products: products ?? { docs: [], totalDocs: 0, page: 1 },
+    });
   } catch (error) {
-    console.log(error?.message)
     next({
       statusCode: 500,
       message: "Error while getting the Products",
@@ -81,16 +75,15 @@ export const getPublicProducts = async (req, res, next) => {
     });
   }
 };
-// getting the product using id
+
 export const getProductById = async (req, res, next) => {
   try {
-    console.log(req.params.id)
     const product = await getSingleProduct(req.params.id);
-    console.log(product, 909);
     if (!product) {
       return next({
+        statusCode: 404,
         status: "error",
-        message: "Product Not Found"
+        message: "Product Not Found",
       });
     }
     return res.status(200).json({
@@ -99,7 +92,6 @@ export const getProductById = async (req, res, next) => {
       product,
     });
   } catch (error) {
-    console.log(error?.message)
     next({
       statusCode: 500,
       message: "Error while getting the Products",
@@ -107,13 +99,13 @@ export const getProductById = async (req, res, next) => {
     });
   }
 };
-// updating the product images
+
 export const updateProduct = async (req, res, next) => {
   try {
     let { oldImages, ...rest } = req.body;
 
     oldImages = JSON.parse(oldImages || "[]");
-    const newImages = req.files.map((file) => file.path);
+    const newImages = (req.files || []).map((file) => file.path);
     const allImages = [...oldImages, ...newImages];
 
     const updateObj = { ...rest, images: allImages };
@@ -126,12 +118,11 @@ export const updateProduct = async (req, res, next) => {
         message: "Product updated successfully",
         updatedProduct,
       });
-    } else {
-      next({
-        statusCode: 404,
-        message: "Product not found",
-      });
     }
+    next({
+      statusCode: 404,
+      message: "Product not found",
+    });
   } catch (error) {
     next({
       statusCode: 500,
@@ -140,16 +131,16 @@ export const updateProduct = async (req, res, next) => {
     });
   }
 };
-// updating the product 
+
 export const updateProductIndividually = async (req, res, next) => {
   try {
-    const { ratings } = req.body
-    const data = await updateProductDB(req.params.id, { ratings })
+    const { ratings } = req.body;
+    const data = await updateProductDB(req.params.id, { ratings });
     return res.status(200).json({
       status: "success",
       message: "Updated",
-      data
-    })
+      data,
+    });
   } catch (error) {
     return next({
       statusCode: 500,
@@ -157,7 +148,7 @@ export const updateProductIndividually = async (req, res, next) => {
       errorMessage: error.message,
     });
   }
-}
+};
 
 export const deleteProduct = async (req, res, next) => {
   try {
@@ -169,12 +160,11 @@ export const deleteProduct = async (req, res, next) => {
         message: "Product deleted successfully",
         deletedProduct,
       });
-    } else {
-      return next({
-        statusCode: 404,
-        message: "Product not found",
-      });
     }
+    return next({
+      statusCode: 404,
+      message: "Product not found",
+    });
   } catch (error) {
     return next({
       statusCode: 500,
@@ -184,10 +174,9 @@ export const deleteProduct = async (req, res, next) => {
   }
 };
 
-// get all the active products
 export const getActiveProduct = async (req, res, next) => {
   try {
-    const products = await getActivePoductsDB()
+    const products = await getActivePoductsDB();
     return res.json({
       status: "success",
       message: "Product fetched successfully",
@@ -196,13 +185,12 @@ export const getActiveProduct = async (req, res, next) => {
   } catch (error) {
     return next({
       statusCode: 500,
-      message: "Error while deleting the Product",
+      message: "Error while fetching active products",
       errorMessage: error.message,
     });
   }
-}
+};
 
-// get all the admin products
 export const getAdminProductNoPagination = async (req, res, next) => {
   try {
     const products = await getAllPoductsDB();
@@ -214,8 +202,8 @@ export const getAdminProductNoPagination = async (req, res, next) => {
   } catch (error) {
     return next({
       statusCode: 500,
-      message: "Error while deleting the Product",
+      message: "Error while fetching products",
       errorMessage: error.message,
     });
   }
-}
+};
