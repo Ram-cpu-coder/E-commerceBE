@@ -26,15 +26,24 @@ const styles = StyleSheet.create({
 const Invoice = ({ order, customerName, invoiceNumber }) => {
 
     const productRows = order.products.map((product, index) => {
-        const rate = product.totalAmount / product.quantity;
+        const quantity = Number(product.quantity) || 1;
+        const amountTotal = Number(product.amount_total);
+        const totalAmount = Number(product.totalAmount);
+        const price = Number(product.price) || 0;
+        const lineTotal = Number.isFinite(amountTotal)
+            ? amountTotal
+            : Number.isFinite(totalAmount)
+                ? totalAmount
+                : price * quantity;
+        const rate = lineTotal / quantity;
 
         return React.createElement(
             View,
             { key: index, style: styles.tableRow },
             React.createElement(Text, { style: { width: "40%" } }, product.name),
-            React.createElement(Text, { style: { width: "20%", textAlign: "right" } }, product.quantity),
-            React.createElement(Text, { style: { width: "20%", textAlign: "right" } }, `$${(rate / 100).toFixed(2)}`),
-            React.createElement(Text, { style: { width: "20%", textAlign: "right" } }, `$${(product.amount_total / 100).toFixed(2)}`)
+            React.createElement(Text, { style: { width: "20%", textAlign: "right" } }, quantity),
+            React.createElement(Text, { style: { width: "20%", textAlign: "right" } }, `$${rate.toFixed(2)}`),
+            React.createElement(Text, { style: { width: "20%", textAlign: "right" } }, `$${lineTotal.toFixed(2)}`)
         );
     });
 

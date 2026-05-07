@@ -5,12 +5,9 @@ import { findUserById } from "../models/users/user.model.js";
 
 
 export const generateInvoice = async (order, invoiceNumber) => {
-    console.log("order", order)
     if (!order) throw new Error("Missing order details")
-    const customer = await findUserById({ _id: order.userId })
-    console.log(customer.fName + " " + customer.lName, 9999)
-    const customerName = customer.fName + " " + customer.lName
-    console.log(typeof (customerName))
+    const customer = await findUserById(order.userId)
+    const customerName = customer ? `${customer.fName || ""} ${customer.lName || ""}`.trim() : "N/A"
     const element = React.createElement(Invoice, { order, customerName, invoiceNumber })
     try {
         const stream = await ReactPDF.renderToStream(element);

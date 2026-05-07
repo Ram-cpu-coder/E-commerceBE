@@ -274,9 +274,6 @@ export const inquiryForm = ({ customer_name, customer_email, customer_message, o
   const orderInquirySub = `Order Inquiry - Order #${orderNumber || "N/A"}`
   const normalInquirySub = `Inquiry`
   return {
-    from: `${process.env.COMPANY_NAME} <${process.env.SMTP_FROM}>`,
-    to: process.env.SMTP_FROM,
-    replyTo: customer_email,
     subject: orderNumber ? orderInquirySub : normalInquirySub,
     text: `
 You have received aninquiry from ${process.env.COMPANY_NAME}'s customer.
@@ -307,3 +304,31 @@ This email was sent from your eCommerce website’s Order Tracking contact form.
   `,
   }
 }
+
+export const inquiryConfirmation = ({ customer_name, customer_message, orderNumber }) => {
+  return {
+    subject: `We received your message - ${process.env.COMPANY_NAME || "NepaStore"}`,
+    text: `
+Hi ${customer_name},
+
+Thanks for contacting ${process.env.COMPANY_NAME || "NepaStore"}. We received your message and will get back to you soon.
+
+${orderNumber ? `Order Number: ${orderNumber}\n` : ""}
+Your message:
+${customer_message}
+
+Regards,
+${process.env.COMPANY_NAME || "NepaStore"}
+`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333; max-width: 620px; margin: 0 auto;">
+        <h2>Thanks for reaching out, ${customer_name}</h2>
+        <p>We received your message and will get back to you soon.</p>
+        ${orderNumber ? `<p><strong>Order Number:</strong> ${orderNumber}</p>` : ""}
+        <p><strong>Your message:</strong></p>
+        <p style="white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 6px;">${customer_message}</p>
+        <p>Regards,<br/><strong>${process.env.COMPANY_NAME || "NepaStore"}</strong></p>
+      </div>
+    `,
+  };
+};

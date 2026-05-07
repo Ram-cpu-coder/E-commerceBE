@@ -4,6 +4,7 @@ import {
     orderCreated,
     orderUpdate,
     inquiryForm,
+    inquiryConfirmation,
 } from "./email.template.js";
 import { eTransporter } from "./email.transport.js";
 
@@ -19,7 +20,17 @@ const getFromAddress = () => {
     return `${process.env.COMPANY_NAME || "NepaStore"} <${fromEmail}>`;
 };
 
-const sendBrevoApiEmail = async ({ to, subject, html, text }) => {
+const getInquiryRecipient = () => {
+    return (
+        getEnv("CONTACT_EMAIL") ||
+        getEnv("SUPPORT_EMAIL") ||
+        getEnv("SMTP_TO") ||
+        getEnv("SMTP_FROM") ||
+        getEnv("SMTP_EMAIL")
+    );
+};
+
+const sendBrevoApiEmail = async ({ to, subject, html, text, replyTo }) => {
     const apiKey = getEnv("BREVO_API_KEY");
     const fromEmail = getEnv("SMTP_FROM");
 
@@ -44,6 +55,7 @@ const sendBrevoApiEmail = async ({ to, subject, html, text }) => {
                 email: fromEmail,
             },
             to: [{ email: to }],
+            ...(replyTo ? { replyTo: { email: replyTo } } : {}),
             subject,
             htmlContent: html,
             textContent: text || "",
@@ -59,10 +71,11 @@ const sendBrevoApiEmail = async ({ to, subject, html, text }) => {
     return data.messageId;
 };
 
-const sendSmtpEmail = async ({ to, subject, html, text }) => {
+const sendSmtpEmail = async ({ to, subject, html, text, replyTo }) => {
     const info = await eTransporter().sendMail({
         from: getFromAddress(),
         to,
+        replyTo,
         subject,
         html,
         text,
@@ -71,14 +84,21 @@ const sendSmtpEmail = async ({ to, subject, html, text }) => {
     return info.messageId;
 };
 
-const sendEmail = async ({ to, subject, html, text }) => {
+const sendEmail = async ({ to, subject, html, text, replyTo }) => {
     if (!to) {
         throw new Error("Email recipient is required");
     }
 
-    const apiMessageId = await sendBrevoApiEmail({ to, subject, html, text });
+    try {
+        const apiMessageId = await sendBrevoApiEmail({ to, subject, html, text, replyTo });
+        if (apiMessageId) {
+            return apiMessageId;
+        }
+    } catch (error) {
+        console.warn("Brevo email failed, falling back to SMTP:", error.message);
+    }
 
-    return apiMessageId || sendSmtpEmail({ to, subject, html, text });
+    return sendSmtpEmail({ to, subject, html, text, replyTo });
 };
 
 // Activation email
@@ -121,6 +141,26 @@ export const deliveredOrderEmail = async (obj) => {
 };
 
 export const inquiryFormEmail = async (obj) => {
-    const info = await eTransporter().sendMail(inquiryForm(obj));
-    return info.messageId;
+    const { subject, html, text } = inquiryForm(obj);
+    const confirmation = inquiryConfirmation(obj);
+
+    const storeMessageId = await sendEmail({
+        to: getInquiryRecipient(),
+        replyTo: obj.customer_email,
+        subject,
+        html,
+        text,
+    });
+
+    const customerMessageId = await sendEmail({
+        to: obj.customer_email,
+        subject: confirmation.subject,
+        html: confirmation.html,
+        text: confirmation.text,
+    });
+
+    return {
+        storeMessageId,
+        customerMessageId,
+    };
 };

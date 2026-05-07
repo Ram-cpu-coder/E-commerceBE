@@ -16,7 +16,6 @@ export const generateRandomInvoiceNumber = () => {
 export const createInvoiceController = async (req, res, next) => {
     try {
         const id = req.params.id;
-        console.log(id)
         if (!id) {
             return res.status(400).json({
                 status: "error",
@@ -33,7 +32,7 @@ export const createInvoiceController = async (req, res, next) => {
         }
 
         // check if there is already an invoice created or not 
-        let invoice = await getInvoice({ _id: order.invoiceId })
+        let invoice = order.invoiceId ? await getInvoice({ _id: order.invoiceId }) : null
 
         // if not created, then create one and store it in DB
         if (!invoice) {
@@ -44,18 +43,24 @@ export const createInvoiceController = async (req, res, next) => {
                 invoiceNumber: invoiceNumber,
                 orderId: order._id,
                 userId: order.userId,
-                userName: user.fName + user.lName || "N/A",
+                userName: user ? `${user.fName || ""} ${user.lName || ""}`.trim() : "N/A",
                 totalAmount: order.totalAmount,
                 shippingAddress: order.shippingAddress || "",
                 taxAmount: order.taxAmount || 0,
                 status: "paid",
-                products: order.products.map(key => ({
-                    id: key.id,
-                    name: key.name,
-                    quantity: key.quantity,
-                    amount_total: key.amount_total,
-                    productImages: key.productImages || []
-                })),
+                products: order.products.map(key => {
+                    const quantity = Number(key.quantity) || 1;
+                    const price = Number(key.price) || 0;
+                    const totalAmount = Number(key.totalAmount);
+
+                    return {
+                        id: key._id,
+                        name: key.name,
+                        quantity,
+                        amount_total: Number.isFinite(totalAmount) ? totalAmount : price * quantity,
+                        productImages: key.productImages || key.images || []
+                    }
+                }),
                 notes: order.notes || ""
             }
 
@@ -74,7 +79,7 @@ export const createInvoiceController = async (req, res, next) => {
             });
         }
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `inline; filename=invoice_${id}.pdf`);
+        res.setHeader("Content-Disposition", `inline; filename="invoice_${id}.pdf"`);
 
         invoiceStream.pipe(res); // Pipe the PDF stream to the response
 
