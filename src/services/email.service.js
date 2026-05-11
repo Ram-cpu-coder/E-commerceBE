@@ -30,7 +30,15 @@ const getInquiryRecipient = () => {
     );
 };
 
-const sendBrevoApiEmail = async ({ to, subject, html, text, replyTo }) => {
+const normalizeBrevoAttachments = (attachments = []) =>
+    attachments.map((attachment) => ({
+        name: attachment.filename || attachment.name,
+        content: Buffer.isBuffer(attachment.content)
+            ? attachment.content.toString("base64")
+            : Buffer.from(String(attachment.content || "")).toString("base64"),
+    }));
+
+const sendBrevoApiEmail = async ({ to, subject, html, text, replyTo, attachments = [] }) => {
     const apiKey = getEnv("BREVO_API_KEY");
     const fromEmail = getEnv("SMTP_FROM");
 
@@ -56,6 +64,7 @@ const sendBrevoApiEmail = async ({ to, subject, html, text, replyTo }) => {
             },
             to: [{ email: to }],
             ...(replyTo ? { replyTo: { email: replyTo } } : {}),
+            ...(attachments.length ? { attachment: normalizeBrevoAttachments(attachments) } : {}),
             subject,
             htmlContent: html,
             textContent: text || "",
@@ -71,7 +80,7 @@ const sendBrevoApiEmail = async ({ to, subject, html, text, replyTo }) => {
     return data.messageId;
 };
 
-const sendSmtpEmail = async ({ to, subject, html, text, replyTo }) => {
+const sendSmtpEmail = async ({ to, subject, html, text, replyTo, attachments = [] }) => {
     const info = await eTransporter().sendMail({
         from: getFromAddress(),
         to,
@@ -79,18 +88,19 @@ const sendSmtpEmail = async ({ to, subject, html, text, replyTo }) => {
         subject,
         html,
         text,
+        attachments,
     });
 
     return info.messageId;
 };
 
-const sendEmail = async ({ to, subject, html, text, replyTo }) => {
+const sendEmail = async ({ to, subject, html, text, replyTo, attachments = [] }) => {
     if (!to) {
         throw new Error("Email recipient is required");
     }
 
     try {
-        const apiMessageId = await sendBrevoApiEmail({ to, subject, html, text, replyTo });
+        const apiMessageId = await sendBrevoApiEmail({ to, subject, html, text, replyTo, attachments });
         if (apiMessageId) {
             return apiMessageId;
         }
@@ -98,7 +108,7 @@ const sendEmail = async ({ to, subject, html, text, replyTo }) => {
         console.warn("Brevo email failed, falling back to SMTP:", error.message);
     }
 
-    return sendSmtpEmail({ to, subject, html, text, replyTo });
+    return sendSmtpEmail({ to, subject, html, text, replyTo, attachments });
 };
 
 // Activation email
@@ -126,18 +136,34 @@ export const OTPemail = async (obj) => {
 };
 
 export const createOrderEmail = async (obj) => {
-    const info = await eTransporter().sendMail(orderCreated(obj));
-    return info.messageId;
+    const { subject, html, text, attachments } = orderCreated(obj);
+    return sendEmail({
+        to: obj.email,
+        subject,
+        html,
+        text,
+        attachments,
+    });
 };
 
 export const shipOrderEmail = async (obj) => {
-    const info = await eTransporter().sendMail(orderUpdate(obj));
-    return info.messageId;
+    const { subject, html, text } = orderUpdate(obj);
+    return sendEmail({
+        to: obj.email,
+        subject,
+        html,
+        text,
+    });
 };
 
 export const deliveredOrderEmail = async (obj) => {
-    const info = await eTransporter().sendMail(orderUpdate(obj));
-    return info.messageId;
+    const { subject, html, text } = orderUpdate(obj);
+    return sendEmail({
+        to: obj.email,
+        subject,
+        html,
+        text,
+    });
 };
 
 export const inquiryFormEmail = async (obj) => {

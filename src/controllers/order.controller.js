@@ -47,7 +47,8 @@ export const getAllOrders = async (req, res, next) => {
 };
 export const getAllOrdersNoPagination = async (req, res, next) => {
     try {
-        const orders = await getAllOrderDB()
+        const filter = req.userData?.role === "admin" ? {} : { userId: req.userData._id };
+        const orders = await getAllOrderDB(filter)
         res.status(200).json({
             status: "success",
             message: "All orders are here!",
@@ -86,7 +87,7 @@ export const updateOrder = async (req, res, next) => {
         const courier = "Australian Post";
         const tracking_number = "AU123456789";
 
-        const { _id, status } = req.body;
+        const { _id, status, shippingAddress, expectedDeliveryDate } = req.body;
 
         // Fetch the order
         const order = await getOneOrderDB(_id);
@@ -100,31 +101,43 @@ export const updateOrder = async (req, res, next) => {
 
         // Fetch the user for sending email
         const user = await findUserById(order?.userId);
-        user.password = "";
+        if (user) {
+            user.password = "";
+        }
 
-        // Prepare a new status history entry
-        const newStatusEntry = {
-            status,
-            date: new Date(),
-            description: `Order is "${status}"`,
-        };
-
-        // Update order with status, courier, tracking number, and append status_history
-        const orderUpdated = await updateOrderDB(_id, {
-            status,
+        const nextStatus = status || order.status;
+        const statusChanged = Boolean(status && status !== order.status);
+        const updatePayload = {
+            ...(status ? { status: nextStatus } : {}),
+            ...(shippingAddress ? { shippingAddress } : {}),
+            ...(expectedDeliveryDate ? { expectedDeliveryDate } : {}),
             courier,
             tracking_number,
-            status_history: newStatusEntry,
-        });
+        };
+
+        if (statusChanged) {
+            updatePayload.status_history = {
+                status: nextStatus,
+                date: new Date(),
+                description: `Order is "${nextStatus}"`,
+            };
+        }
+
+        // Update order with status, courier, tracking number, and append status_history
+        const orderUpdated = await updateOrderDB(_id, updatePayload);
 
         // Send email notification if status is not pending
-        if (status !== "pending") {
+        if (statusChanged && nextStatus !== "pending" && user?.email) {
             const emailObj = {
                 userName: user.fName + " " + user.lName,
                 email: user.email,
                 order: orderUpdated,
             };
-            await shipOrderEmail(emailObj);
+            try {
+                await shipOrderEmail(emailObj);
+            } catch (emailError) {
+                console.warn("Order status email failed:", emailError.message);
+            }
         }
 
         res.status(200).json({

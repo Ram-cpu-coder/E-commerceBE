@@ -8,8 +8,8 @@ export const getOrderDB = (filter) => {
     return OrderSchema.find(filter);
 };
 
-export const getAllOrderDB = () => {
-    return OrderSchema.find({});
+export const getAllOrderDB = (filter = {}) => {
+    return OrderSchema.find(filter);
 };
 
 export const getOrdersForTimeFrame = (startTime, endTime) => {

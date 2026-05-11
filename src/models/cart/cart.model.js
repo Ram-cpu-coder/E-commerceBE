@@ -20,7 +20,16 @@ export const findProductInCart = (userId, _id) => {
 }
 // if there is a existing cart and item, then just update the quantity that is provided or update by 1 by default and also adds the cost price upon change in the quantity from the user prospective
 export const findProductInCartAndAdd = (userId, product) => {
-    return CartSchema.findOneAndUpdate({ userId, "cartItems._id": product._id }, { $inc: { "cartItems.$.quantity": product.quantity || 1, "cartItems.$.costPrice": product.costPrice } }, { new: true })
+    return CartSchema.findOneAndUpdate(
+        { userId, "cartItems._id": product._id },
+        {
+            $inc: {
+                "cartItems.$.quantity": product.quantity || 1,
+                "cartItems.$.totalAmount": product.totalAmount || 0
+            }
+        },
+        { new: true }
+    )
 }
 // if there is a existing cart but not the product then simply add it 
 export const findCartAndAdd = (filter, obj) => {

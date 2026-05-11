@@ -3,15 +3,140 @@ import { findCart } from "../models/cart/cart.model.js";
 import { createOrderDB, getOrderDB, updateOrderDB } from "../models/orders/order.model.js";
 import { findUserById } from "../models/users/user.model.js";
 import { createOrderEmail } from "../services/email.service.js";
-import { getSingleProduct, updateProductDB } from "../models/products/product.model.js";
+import { updateProductDB } from "../models/products/product.model.js";
 import ProductSchema from "../models/products/product.schema.js";
 import { generateRandomInvoiceNumber } from "./invoice.controller.js";
 import { createInvoice, getInvoice } from "../models/invoices/invoices.model.js";
 import { generateInvoice } from "../services/generateInvoice.js";
 import { streamToBuffer } from "../utils/streamToBuffer.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const origin = process.env.ROOT_URL + "/payment-result"
+let stripeClient;
+
+const getStripeClient = () => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY is required for payment processing.");
+  }
+
+  if (!stripeClient) {
+    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+
+  return stripeClient;
+};
+
+const buildStockError = (issues) => ({
+  status: "error",
+  message:
+    issues.length === 1
+      ? issues[0].message
+      : "Some items in your cart are unavailable or exceed available stock.",
+  stockIssues: issues,
+});
+
+const validateCartStock = async (cart) => {
+  if (!cart || !cart.cartItems?.length) {
+    return {
+      ok: false,
+      issues: [{ message: "Cart is empty." }],
+      items: [],
+      totalAmount: 0,
+    };
+  }
+
+  const issues = [];
+  const items = [];
+
+  for (const item of cart.cartItems) {
+    const product = await ProductSchema.findById(item._id).lean();
+    const quantity = Number(item.quantity || 0);
+
+    if (!product) {
+      issues.push({
+        productId: item._id,
+        productName: item.name || "Product",
+        requested: quantity,
+        available: 0,
+        message: `${item.name || "This product"} is no longer available.`,
+      });
+      continue;
+    }
+
+    if (product.status !== "active") {
+      issues.push({
+        productId: item._id,
+        productName: product.name,
+        requested: quantity,
+        available: product.stock,
+        message: `${product.name} is currently inactive.`,
+      });
+      continue;
+    }
+
+    if (quantity < 1 || product.stock < quantity) {
+      issues.push({
+        productId: item._id,
+        productName: product.name,
+        requested: quantity,
+        available: product.stock,
+        message: `${product.name} has only ${product.stock} item${product.stock === 1 ? "" : "s"} available.`,
+      });
+      continue;
+    }
+
+    items.push({
+      _id: product._id,
+      name: product.name,
+      quantity,
+      price: product.price,
+      totalAmount: product.price * quantity,
+      images: product.images || [],
+      category: product.category,
+    });
+  }
+
+  const totalAmount = items.reduce((sum, item) => sum + item.totalAmount, 0);
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    items,
+    totalAmount,
+  };
+};
+
+const deductStockForItems = async (items) => {
+  const deducted = [];
+
+  for (const item of items) {
+    const updatedProduct = await ProductSchema.findOneAndUpdate(
+      { _id: item._id, status: "active", stock: { $gte: item.quantity } },
+      { $inc: { stock: -item.quantity } },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      await rollbackStock(deducted);
+      throw new Error(`${item.name} does not have enough stock available.`);
+    }
+
+    deducted.push({ _id: item._id, quantity: item.quantity });
+
+    if (updatedProduct.stock <= 0) {
+      await updateProductDB(updatedProduct._id, { status: "inactive" });
+    }
+  }
+
+  return deducted;
+};
+
+const rollbackStock = async (items) => {
+  for (const item of items) {
+    await ProductSchema.findByIdAndUpdate(item._id, {
+      $inc: { stock: item.quantity },
+      $set: { status: "active" },
+    });
+  }
+};
 
 
 export const initiatePayment = async (req, res, next) => {
@@ -19,17 +144,18 @@ export const initiatePayment = async (req, res, next) => {
     const user = req.userData;
     const cart = await findCart(user._id);
 
-    console.log(cart.cartItems, "cart while making the payment")
-
     if (!cart || cart.cartItems.length === 0) {
       return res.status(400).json({ status: "error", message: "Cart is empty" });
     }
 
-    // total amount
-    const totalAmounts = cart?.cartItems.reduce((total, item) => total + item.totalAmount, 0)
+    const stockCheck = await validateCartStock(cart);
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: parseInt(totalAmounts * 100, 10),
+    if (!stockCheck.ok) {
+      return res.status(409).json(buildStockError(stockCheck.issues));
+    }
+
+    const paymentIntent = await getStripeClient().paymentIntents.create({
+      amount: Math.round(stockCheck.totalAmount * 100),
       currency: "aud",
       metadata: { userId: user._id.toString() }
     })
@@ -38,7 +164,10 @@ export const initiatePayment = async (req, res, next) => {
       status: "success",
       message: "Payment intent created successfully",
       paymentIntent: paymentIntent,
-      cart: cart
+      cart: {
+        ...cart.toObject(),
+        cartItems: stockCheck.items,
+      }
     });
   } catch (error) {
     console.error("Error creating checkout session:", error);
@@ -51,34 +180,63 @@ export const initiatePayment = async (req, res, next) => {
 }
 
 export const createOrder = async (req, res, next) => {
+  let deductedItems = [];
+  let shouldRollbackStock = true;
+
   try {
-    const { shippingAddress, userId, paymentIntent } = req.body
+    const { shippingAddress, paymentIntent } = req.body
+    const userId = req.userData._id;
     const user = await findUserById(userId)
     const cart = await findCart(user._id);
     let orderVerified = false;
 
-    // handle the stock and price 
-    // await stockHandling(cart)
+    const stockCheck = await validateCartStock(cart);
+
+    if (!stockCheck.ok) {
+      return res.status(409).json(buildStockError(stockCheck.issues));
+    }
+
+    if (!paymentIntent?.id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Payment confirmation is required before placing an order.",
+      });
+    }
+
+    const stripePaymentIntent = await getStripeClient().paymentIntents.retrieve(paymentIntent.id);
+    if (
+      stripePaymentIntent.status !== "succeeded" ||
+      stripePaymentIntent.amount !== Math.round(stockCheck.totalAmount * 100) ||
+      String(stripePaymentIntent.metadata?.userId || "") !== String(userId)
+    ) {
+      return res.status(400).json({
+        status: "error",
+        message: "Payment could not be verified for the current cart total.",
+      });
+    }
+
+    deductedItems = await deductStockForItems(stockCheck.items);
 
     // create order
     const order = await createOrderDB({
-      products: cart.cartItems,
+      products: stockCheck.items,
       shippingAddress,
       userId,
       status: "pending",
-      totalAmount: cart.cartItems.reduce(
-        (sum, item) => sum + item.totalAmount,
-        0
-      ),
+      totalAmount: stockCheck.totalAmount,
       paymentDetails: paymentIntent
     })
+    shouldRollbackStock = false;
 
-    console.log(order, cart)
     // creating the invoice
-    const invoice = await invoiceCreation(order, user, userId)
+    try {
+      const invoice = await invoiceCreation(order, user, userId)
 
-    // Send confirmation email with PDF invoice
-    await sendConfirmationEmail(user, order, invoice)
+      // Send confirmation email with PDF invoice
+      await sendConfirmationEmail(user, order, invoice)
+    } catch (notificationError) {
+      console.warn("Order invoice/email failed:", notificationError.message);
+    }
 
     orderVerified = true
     return res.status(200).json({
@@ -89,6 +247,9 @@ export const createOrder = async (req, res, next) => {
 
   } catch (error) {
     console.log(error?.message)
+    if (shouldRollbackStock && deductedItems.length) {
+      await rollbackStock(deductedItems);
+    }
     next({
       statusCode: 500,
       message: "Order Creation Failed!",
@@ -102,43 +263,16 @@ export const stockHandling = async (req, res, next) => {
   const user = req.userData
   const cart = await findCart(user._id);
   try {
-    if (!cart || cart.cartItems.length === 0) {
-      return next({
-        statusCode: 400,
-        message: "Cart is empty!"
-      });
+    const stockCheck = await validateCartStock(cart);
+
+    if (!stockCheck.ok) {
+      return res.status(409).json(buildStockError(stockCheck.issues));
     }
 
-    // deducting the product stock acc to the product quantity ordered
-    for (let item of cart.cartItems) {
-      const product = await getSingleProduct(item._id);
-      if (!product) {
-        return next({
-          statusCode: 400,
-          message: `Product ${item._id} not found.`
-        });
-      }
-
-      const updatedProduct = await ProductSchema.findOneAndUpdate(
-        { _id: product._id, stock: { $gte: item.quantity } },
-        { $inc: { stock: -item.quantity } },
-        { new: true }
-      );
-
-      if (!updatedProduct) {
-        return next({
-          statusCode: 400,
-          message: `Not enough stock for product ${item._id}`
-        });
-      }
-
-      if (updatedProduct.stock <= 0) {
-        await updateProductDB(updatedProduct._id, { status: "inactive" });
-      }
-    }
     return res.status(200).json({
       status: "success",
-      message: "Stock Updated!"
+      message: "Stock is available.",
+      cartItems: stockCheck.items,
     });
   } catch (error) {
     next({

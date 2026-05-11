@@ -147,7 +147,7 @@ export const signInUserController = async (req, res, next) => {
 
 export const updateUserController = async (req, res, next) => {
   try {
-    const obj = req.body;
+    const obj = { ...req.body };
     const _id = req.userData._id;
 
     if (!_id) {
@@ -156,6 +156,12 @@ export const updateUserController = async (req, res, next) => {
         message: "User not found",
       });
     }
+
+    delete obj.password;
+    delete obj.confirmPassword;
+    delete obj.email;
+    delete obj.role;
+    delete obj.refreshJWT;
 
     const updatedUser = await updateUser(_id, obj);
     updatedUser?._id

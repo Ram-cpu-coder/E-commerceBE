@@ -1,4 +1,4 @@
-export const getPaginatedData = async (model, req) => {
+export const getPaginatedData = async (model, req, overrides = {}) => {
     const limit = 10;
     const page = parseInt(req.query.page) || 1;
 
@@ -12,6 +12,7 @@ export const getPaginatedData = async (model, req) => {
             path: "reviews",
             select: "productId productName productImage userId email userName userImage rating comment approved createdAt", // specify fields to keep payload lean
         },
+        ...overrides,
     };
 
     return await model.paginate({}, options);
@@ -35,7 +36,7 @@ export const getPaginatedOrderData = async (model, req) => {
 
 
 
-export const getPaginatedDataFilter = async (model, req, filter) => {
+export const getPaginatedDataFilter = async (model, req, filter, overrides = {}) => {
     const limit = Number(req.query.limit) || 10;
     const page = parseInt(req.query.page) || 1;
 
@@ -48,6 +49,7 @@ export const getPaginatedDataFilter = async (model, req, filter) => {
         // Keep public listing payload small. Product reviews should be fetched
         // on product detail pages, not on the homepage/listing response.
         select: 'name price images category status ratings',
+        ...overrides,
     };
 
     return await model.paginate(filter, options);

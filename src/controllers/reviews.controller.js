@@ -64,7 +64,10 @@ export const createReview = async (req, res, next) => {
 export const getAllReviewsController = async (req, res, next) => {
     try {
         // const reviews = await getAllReview();
-        const reviews = await getPaginatedData(Review, req)
+        const reviews = await getPaginatedData(Review, req, {
+            select: "productId productName productImage userId email userName userImage rating comment approved createdAt",
+            populate: undefined,
+        })
 
         if (!reviews) {
             return next({
@@ -98,7 +101,9 @@ export const getPubReviews = async (req, res, next) => {
             filter.productId = productId;
         }
 
-        const reviews = await getPaginatedDataFilter(Review, req, filter)
+        const reviews = await getPaginatedDataFilter(Review, req, filter, {
+            select: "productId productName productImage userId email userName userImage rating comment approved createdAt",
+        })
 
         if (!reviews) {
             return next({

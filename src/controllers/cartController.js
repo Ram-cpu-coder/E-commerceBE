@@ -17,12 +17,35 @@ export const createCartController = async (req, res, next) => {
         }
         // finding the detail of the product
         const productResponse = await getSingleProduct(_id);
-        const { price } = productResponse;
-        const totalAmount = (price * quantity);
+
+        if (!productResponse || productResponse.status !== "active") {
+            return next({
+                statusCode: 404,
+                message: "This product is not available right now."
+            })
+        }
+
+        const requestedQuantity = Number(quantity || 1);
+        const { price, stock } = productResponse;
         // console.log(costPrice)
-        const product = { quantity: quantity ?? 1, price, totalAmount, ...productResponse._doc }
+        const product = {
+            ...productResponse,
+            quantity: requestedQuantity,
+            price,
+            totalAmount: price * requestedQuantity,
+        }
 
         const existingCart = await findCart(userId)
+        const existingItem = existingCart?.cartItems?.find((item) => String(item._id) === String(_id));
+        const nextQuantity = (existingItem?.quantity || 0) + requestedQuantity;
+
+        if (nextQuantity > stock) {
+            return next({
+                statusCode: 409,
+                message: `${productResponse.name} has only ${stock} item${stock === 1 ? "" : "s"} available.`
+            })
+        }
+
         if (!existingCart) {
             const response = await createCart(userId, product)
             return res.status(200).json({
@@ -115,6 +138,14 @@ export const updateCartItems = async (req, res, next) => {
         const userId = req.userData._id
         const { quantity, _id, totalPrice } = req.body
         // const cart = await getCartItemByProductId(userId, _id)
+        const productResponse = await getSingleProduct(_id);
+
+        if (!productResponse || productResponse.status !== "active") {
+            return next({
+                statusCode: 404,
+                message: "This product is not available right now."
+            })
+        }
 
         if (quantity === 0) {
             const response = await deleteCartItems(userId, _id);
@@ -125,12 +156,24 @@ export const updateCartItems = async (req, res, next) => {
                     response
                 });
             }
+
+            return res.status(200).json({
+                status: "success",
+                message: "Item removed!",
+                response
+            })
         }
 
+        if (quantity > productResponse.stock) {
+            return next({
+                statusCode: 409,
+                message: `${productResponse.name} has only ${productResponse.stock} item${productResponse.stock === 1 ? "" : "s"} available.`
+            })
+        }
 
         const product = {
             quantity,
-            totalAmount: totalPrice
+            totalAmount: productResponse.price * quantity
         }
         const response = await updateCartItem(userId, _id, product)
         return res.status(200).json({
