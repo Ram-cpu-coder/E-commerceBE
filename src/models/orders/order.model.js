@@ -12,8 +12,8 @@ export const getAllOrderDB = (filter = {}) => {
     return OrderSchema.find(filter);
 };
 
-export const getOrdersForTimeFrame = (startTime, endTime) => {
-    return OrderSchema.find({ createdAt: { $gte: new Date(startTime), $lt: new Date(endTime) } });
+export const getOrdersForTimeFrame = (startTime, endTime, filter = {}) => {
+    return OrderSchema.find({ ...filter, createdAt: { $gte: new Date(startTime), $lt: new Date(endTime) } });
 };
 
 export const updateOrderDB = (_id, updateObj) => {
@@ -53,7 +53,7 @@ export const deleteOrderItemDB = (_id, ID) => {
         { new: true })
 }
 
-export const getSalesTimeFrameApi = async (startTime, endTime, granularity) => {
+export const getSalesTimeFrameApi = async (startTime, endTime, granularity, filter = {}) => {
     const dateFormats = {
         day: '%Y-%m-%d',
         week: '%Y-%U',
@@ -82,27 +82,51 @@ export const getSalesTimeFrameApi = async (startTime, endTime, granularity) => {
             };
         }
 
-        const sales = await OrderSchema.aggregate([
-            {
-                $match: {
-                    createdAt: {
-                        $gte: start,
-                        $lte: end,
+        const shopId = filter.shopIds;
+        const scopedPipeline = shopId
+            ? [
+                { $match: { createdAt: { $gte: start, $lte: end }, shopIds: shopId } },
+                { $unwind: "$fulfillments" },
+                { $match: { "fulfillments.shopId": shopId } },
+                {
+                    $group: {
+                        _id: {
+                            $dateToString: {
+                                format: dateFormats[granularity],
+                                date: '$createdAt',
+                            },
+                        },
+                        totalSales: { $sum: 1 },
+                        totalRevenue: { $sum: '$fulfillments.totalAmount' },
                     },
                 },
-            },
-            {
-                $group: {
-                    _id: {
-                        $dateToString: {
-                            format: dateFormats[granularity],
-                            date: '$createdAt',
+            ]
+            : [
+                {
+                    $match: {
+                        ...filter,
+                        createdAt: {
+                            $gte: start,
+                            $lte: end,
                         },
                     },
-                    totalSales: { $sum: 1 },
-                    totalRevenue: { $sum: '$totalAmount' },
                 },
-            },
+                {
+                    $group: {
+                        _id: {
+                            $dateToString: {
+                                format: dateFormats[granularity],
+                                date: '$createdAt',
+                            },
+                        },
+                        totalSales: { $sum: 1 },
+                        totalRevenue: { $sum: '$totalAmount' },
+                    },
+                },
+            ];
+
+        const sales = await OrderSchema.aggregate([
+            ...scopedPipeline,
             {
                 $sort: { _id: 1 },
             },

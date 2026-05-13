@@ -17,6 +17,8 @@ import wishListRouter from "./src/routers/wishList.route.js";
 import featureBannerRouter from "./src/routers/featureBanner.route.js";
 import recentActivityRouter from "./src/routers/recentActivity.route.js";
 import orderInquiryRouter from "./src/routers/orderInquiry.route.js";
+import shopRouter from "./src/routers/shop.route.js";
+import platformRouter from "./src/routers/platform.route.js";
 
 import { errorHandler } from "./src/middlewares/error.handler.js";
 import { startCronJobs } from "./src/utils/cronsJobs.js";
@@ -96,6 +98,8 @@ app.use("/api/v1/history", apiLimiter, historyRouter);
 app.use("/api/v1/featureBanner", apiLimiter, featureBannerRouter);
 app.use("/api/v1/recentActivity", apiLimiter, recentActivityRouter);
 app.use("/api/v1/inquiry", apiLimiter, orderInquiryRouter);
+app.use("/api/v1/shops", apiLimiter, shopRouter);
+app.use("/api/v1/platform", apiLimiter, platformRouter);
 
 app.use(errorHandler);
 

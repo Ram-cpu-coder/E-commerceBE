@@ -36,8 +36,40 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "customer"],
+      enum: ["superadmin", "admin", "customer"],
       default: "customer",
+    },
+    shopId: {
+      type: String,
+      index: true,
+      default: "",
+    },
+    shopIds: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    shopName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    adminRequest: {
+      status: {
+        type: String,
+        enum: ["none", "pending", "approved", "rejected"],
+        default: "none",
+      },
+      message: {
+        type: String,
+        default: "",
+      },
+      requestedAt: Date,
+      respondedAt: Date,
+      responseMessage: {
+        type: String,
+        default: "",
+      },
     },
     address: {
       type: String,

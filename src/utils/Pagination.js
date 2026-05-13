@@ -7,7 +7,7 @@ export const getPaginatedData = async (model, req, overrides = {}) => {
         limit,
         sort: '-createdAt',
         lean: true, // returns plain JS objects
-        select: 'name price images category status ratings reviews', // only fetch necessary fields
+        select: 'name price images category status ratings reviews shopId shopName', // only fetch necessary fields
         populate: {
             path: "reviews",
             select: "productId productName productImage userId email userName userImage rating comment approved createdAt", // specify fields to keep payload lean
@@ -18,7 +18,7 @@ export const getPaginatedData = async (model, req, overrides = {}) => {
     return await model.paginate({}, options);
 }
 // for admin orders
-export const getPaginatedOrderData = async (model, req) => {
+export const getPaginatedOrderData = async (model, req, filter = {}) => {
     const limit = Number(req.query.limit) || 10;
     const page = Number(req.query.page) || 1;
 
@@ -31,7 +31,7 @@ export const getPaginatedOrderData = async (model, req) => {
         select: '',
     };
 
-    return await model.paginate({}, options);
+    return await model.paginate(filter, options);
 };
 
 
@@ -48,7 +48,7 @@ export const getPaginatedDataFilter = async (model, req, filter, overrides = {})
         leanWithId: false,
         // Keep public listing payload small. Product reviews should be fetched
         // on product detail pages, not on the homepage/listing response.
-        select: 'name price images category status ratings',
+        select: 'name price images category status ratings shopId shopName',
         ...overrides,
     };
 

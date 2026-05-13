@@ -8,6 +8,7 @@ import {
 } from "../models/reviews/review.model.js";
 import Review from "../models/reviews/review.schema.js";
 import { getPaginatedData, getPaginatedDataFilter } from "../utils/Pagination.js";
+import { writeAuditLog } from "./platform.controller.js";
 
 export const createReview = async (req, res, next) => {
     try {
@@ -137,6 +138,14 @@ export const updateReviewController = async (req, res, next) => {
                 message: "Couldnot update the review!",
             });
         }
+        await writeAuditLog(
+            req.userData,
+            "review_moderated",
+            "review",
+            _id,
+            `Review ${approved ? "approved" : "hidden"}.`,
+            { approved }
+        );
         return res.status(200).json({
             status: "success",
             message: "Successfully, updated review!",
@@ -155,6 +164,14 @@ export const deleteReviewController = async (req, res, next) => {
     try {
         const { id } = req.body
         const deletingReview = await deleteReview(id)
+        await writeAuditLog(
+            req.userData,
+            "review_deleted",
+            "review",
+            id,
+            "Review deleted by admin.",
+            {}
+        );
         return res.status(200).json({
             status: "success",
             message: "Successfully, deleted review!",

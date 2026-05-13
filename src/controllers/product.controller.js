@@ -7,12 +7,22 @@ import {
   updateProductDB,
 } from "../models/products/product.model.js";
 import Product from "../models/products/product.schema.js";
-import { getPaginatedData, getPaginatedDataFilter } from "../utils/Pagination.js";
+import { getPaginatedDataFilter } from "../utils/Pagination.js";
+import {
+  canAccessShopOwnedDoc,
+  getShopScopedFilter,
+  getUserShopId,
+  getUserShopName,
+} from "../utils/shopScope.js";
+import { writeAuditLog } from "./platform.controller.js";
 
 export const createProduct = async (req, res, next) => {
   try {
     const imageUrls = req.files?.map((file) => file.path);
     req.body.images = imageUrls;
+    req.body.shopId = getUserShopId(req.userData);
+    req.body.shopName = getUserShopName(req.userData);
+    req.body.shopAdminId = req.userData._id;
 
     const product = await createNewPoductDB(req.body);
 
@@ -34,7 +44,9 @@ export const createProduct = async (req, res, next) => {
 
 export const getAllProducts = async (req, res, next) => {
   try {
-    const products = await getPaginatedData(Product, req);
+    const products = await getPaginatedDataFilter(Product, req, getShopScopedFilter(req.userData), {
+      select: "name price images category status ratings stock shopId shopName shopAdminId",
+    });
 
     if (products) {
       return res.status(200).json({
@@ -110,6 +122,18 @@ export const updateProduct = async (req, res, next) => {
 
     const updateObj = { ...rest, images: allImages };
 
+    const product = await getSingleProduct(req.params.id);
+    if (!canAccessShopOwnedDoc(req.userData, product)) {
+      return next({
+        statusCode: 403,
+        message: "You can only update products from your own shop.",
+      });
+    }
+
+    delete updateObj.shopId;
+    delete updateObj.shopName;
+    delete updateObj.shopAdminId;
+
     const updatedProduct = await updateProductDB(req.params.id, updateObj);
 
     if (updatedProduct?._id) {
@@ -134,8 +158,35 @@ export const updateProduct = async (req, res, next) => {
 
 export const updateProductIndividually = async (req, res, next) => {
   try {
-    const { ratings } = req.body;
-    const data = await updateProductDB(req.params.id, { ratings });
+    const { ratings, status } = req.body;
+    const updateObj = {};
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "ratings")) {
+      updateObj.ratings = ratings;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
+      const product = await getSingleProduct(req.params.id);
+      if (!canAccessShopOwnedDoc(req.userData, product)) {
+        return next({
+          statusCode: 403,
+          message: "You can only moderate products from your own shop unless you are Super Admin.",
+        });
+      }
+      updateObj.status = status;
+    }
+
+    const data = await updateProductDB(req.params.id, updateObj);
+    if (Object.prototype.hasOwnProperty.call(updateObj, "status")) {
+      await writeAuditLog(
+        req.userData,
+        "product_status_moderated",
+        "product",
+        req.params.id,
+        `Product status changed to ${updateObj.status}.`,
+        { status: updateObj.status }
+      );
+    }
     return res.status(200).json({
       status: "success",
       message: "Updated",
@@ -152,6 +203,14 @@ export const updateProductIndividually = async (req, res, next) => {
 
 export const deleteProduct = async (req, res, next) => {
   try {
+    const product = await getSingleProduct(req.params.id);
+    if (!canAccessShopOwnedDoc(req.userData, product)) {
+      return next({
+        statusCode: 403,
+        message: "You can only delete products from your own shop.",
+      });
+    }
+
     const deletedProduct = await deleteProductDB(req.params.id);
 
     if (deletedProduct?._id) {
@@ -193,7 +252,7 @@ export const getActiveProduct = async (req, res, next) => {
 
 export const getAdminProductNoPagination = async (req, res, next) => {
   try {
-    const products = await getAllPoductsDB();
+    const products = await getAllPoductsDB(getShopScopedFilter(req.userData));
     return res.json({
       status: "success",
       message: "Product fetched successfully",

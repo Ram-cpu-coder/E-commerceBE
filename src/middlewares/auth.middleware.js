@@ -94,7 +94,7 @@ export const refreshAuthenticate = async (req, res, next) => {
 export const isAdmin = (req, res, next) => {
     req.user = req.userData || req.user;
 
-    if (req.user?.role === "admin") {
+    if (req.user?.role === "admin" || req.user?.role === "superadmin") {
         return next();
     } else {
         return next({
@@ -103,4 +103,18 @@ export const isAdmin = (req, res, next) => {
             errorMessage: "User is not an admin!",
         });
     }
+};
+
+export const isSuperAdmin = (req, res, next) => {
+    req.user = req.userData || req.user;
+
+    if (req.user?.role === "superadmin") {
+        return next();
+    }
+
+    return next({
+        statusCode: 403,
+        message: "Not authorized!!!",
+        errorMessage: "User is not a super admin!",
+    });
 };

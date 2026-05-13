@@ -1,16 +1,23 @@
 import express from "express";
 import {
   deleteUserController,
+  getAdminAccessRequestsController,
+  getAllUsersController,
   getAllUsersTimeFrame,
   getUserDetailController,
   logoutUserController,
   registerUserController,
   renewJwt,
+  requestAdminAccessController,
   resendVerificationMail,
+  respondAdminAccessRequestController,
   signInUserController,
+  updateUserByAdminController,
   updateUserController,
+  updateUserRoleController,
 } from "../controllers/user.controller.js";
-import { authenticate, isAdmin, refreshAuthenticate } from "../middlewares/auth.middleware.js";
+import { authenticate, isAdmin, isSuperAdmin, refreshAuthenticate } from "../middlewares/auth.middleware.js";
+import upload from "../config/multer.config.js";
 import {
   createUserValidator,
   singinUserValidator,
@@ -30,10 +37,18 @@ router.post("/signin", singinUserValidator, signInUserController);
 router.get("/", authenticate, getUserDetailController);
 
 // get users
+router.get("/users", authenticate, isAdmin, getAllUsersController);
 router.get("/timeFrame", authenticate, isAdmin, getAllUsersTimeFrame);
 
+// admin access request flow
+router.post("/admin-request", authenticate, requestAdminAccessController);
+router.get("/admin-requests", authenticate, isSuperAdmin, getAdminAccessRequestsController);
+router.put("/admin-requests/:id", authenticate, isSuperAdmin, respondAdminAccessRequestController);
+
 //update user
-router.put("/", authenticate, updateUserController);
+router.put("/", authenticate, upload.single("image"), updateUserController);
+router.put("/users/:id", authenticate, isAdmin, updateUserByAdminController);
+router.put("/users/:id/role", authenticate, isSuperAdmin, updateUserRoleController);
 
 //delete user
 router.delete("/:_id", authenticate, isAdmin, deleteUserController);

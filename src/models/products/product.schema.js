@@ -33,6 +33,21 @@ const ProductSchema = new mongoose.Schema(
       ref: "Category",
       index: true, // index for faster category filtering
     },
+    shopId: {
+      type: String,
+      index: true,
+      default: "",
+    },
+    shopName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    shopAdminId: {
+      type: mongoose.Types.ObjectId,
+      ref: "user",
+      index: true,
+    },
     images: [String],
     ratings: {
       type: Number,
@@ -53,6 +68,7 @@ ProductSchema.plugin(mongoosePaginate);
 
 // Compound index for common queries (status + createdAt) to speed up sorting/pagination
 ProductSchema.index({ status: 1, createdAt: -1 });
+ProductSchema.index({ shopId: 1, createdAt: -1 });
 
 // Export the model
 export default mongoose.model("Product", ProductSchema);

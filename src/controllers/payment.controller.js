@@ -1,10 +1,11 @@
 import Stripe from "stripe";
 import { findCart } from "../models/cart/cart.model.js";
 import { createOrderDB, getOrderDB, updateOrderDB } from "../models/orders/order.model.js";
-import { findUserById } from "../models/users/user.model.js";
+import { addUserShopIds, findUserById } from "../models/users/user.model.js";
 import { createOrderEmail } from "../services/email.service.js";
 import { updateProductDB } from "../models/products/product.model.js";
 import ProductSchema from "../models/products/product.schema.js";
+import ShopSchema from "../models/shops/shop.schema.js";
 import { generateRandomInvoiceNumber } from "./invoice.controller.js";
 import { createInvoice, getInvoice } from "../models/invoices/invoices.model.js";
 import { generateInvoice } from "../services/generateInvoice.js";
@@ -91,6 +92,8 @@ const validateCartStock = async (cart) => {
       totalAmount: product.price * quantity,
       images: product.images || [],
       category: product.category,
+      shopId: product.shopId || "",
+      shopName: product.shopName || "",
     });
   }
 
@@ -136,6 +139,51 @@ const rollbackStock = async (items) => {
       $set: { status: "active" },
     });
   }
+};
+
+const buildShopFulfillments = async (items) => {
+  const grouped = items.reduce((acc, item) => {
+    const shopId = item.shopId || "unassigned";
+    if (!acc[shopId]) {
+      acc[shopId] = {
+        shopId,
+        shopName: item.shopName || "Unassigned shop",
+        products: [],
+        totalAmount: 0,
+      };
+    }
+    acc[shopId].products.push(item);
+    acc[shopId].totalAmount += Number(item.totalAmount || 0);
+    return acc;
+  }, {});
+
+  const shops = await ShopSchema.find({
+    _id: { $in: Object.keys(grouped).filter((id) => id !== "unassigned") },
+  }).lean();
+  const shopById = new Map(shops.map((shop) => [String(shop._id), shop]));
+
+  return Object.values(grouped).map((group) => {
+    const shop = shopById.get(String(group.shopId));
+    return {
+      ...group,
+      shopName: shop?.name || group.shopName,
+      paymentAccount: {
+        provider: shop?.paymentProvider || "manual",
+        payoutAccountId: shop?.payoutAccountId || "",
+        payoutAccountEmail: shop?.payoutAccountEmail || "",
+        payoutCurrency: shop?.payoutCurrency || "AUD",
+        setupStatus: shop?.paymentSetupStatus || "pending",
+      },
+      status: "pending",
+      status_history: [
+        {
+          status: "pending",
+          date: new Date(),
+          description: `Fulfillment created for ${shop?.name || group.shopName}.`,
+        },
+      ],
+    };
+  });
 };
 
 
@@ -218,14 +266,24 @@ export const createOrder = async (req, res, next) => {
     deductedItems = await deductStockForItems(stockCheck.items);
 
     // create order
+    const shopIds = [
+      ...new Set(stockCheck.items.map((item) => item.shopId).filter(Boolean)),
+    ];
+    const fulfillments = await buildShopFulfillments(stockCheck.items);
+
     const order = await createOrderDB({
       products: stockCheck.items,
+      shopIds,
+      fulfillments,
       shippingAddress,
       userId,
       status: "pending",
       totalAmount: stockCheck.totalAmount,
       paymentDetails: paymentIntent
     })
+    if (shopIds.length) {
+      await addUserShopIds({ _id: userId }, shopIds);
+    }
     shouldRollbackStock = false;
 
     // creating the invoice
