@@ -170,7 +170,19 @@ const buildShopPerformance = (shops, products, orders, users) => {
   });
 
   orders.forEach((order) => {
-    (order.fulfillments || []).forEach((fulfillment) => {
+    const fulfillments = order.fulfillments || [];
+    if (!fulfillments.length && order.products?.length) {
+      order.products.forEach((product) => {
+        const shop = shopMap.get(String(product.shopId || ""));
+        if (!shop) return;
+        shop.revenue += toCurrency(product.totalAmount || (Number(product.price || 0) * Number(product.quantity || 1)));
+        shop.orders += 1;
+        if (order.status === "delivered") shop.deliveredOrders += 1;
+        if (["pending", "confirmed"].includes(order.status)) shop.pendingOrders += 1;
+      });
+      return;
+    }
+    fulfillments.forEach((fulfillment) => {
       const shop = shopMap.get(String(fulfillment.shopId || ""));
       if (!shop) return;
       shop.revenue += toCurrency(fulfillment.totalAmount);
@@ -209,11 +221,25 @@ export const createShopController = async (req, res, next) => {
 
 export const getShopsController = async (_req, res, next) => {
   try {
-    const shops = await getShopsDB();
+    const [shops, products, orders] = await Promise.all([
+      getShopsDB(),
+      ProductSchema.find({}).select("shopId").lean(),
+      OrderSchema.find({}).select("products fulfillments status").lean(),
+    ]);
+    const performanceByShop = new Map(
+      buildShopPerformance(shops, products, orders).map((shop) => [String(shop._id), shop])
+    );
     return res.status(200).json({
       status: "success",
       message: "Shops listed successfully.",
-      shops: shops.map(publicShop),
+      shops: shops.map((shop) => ({
+        ...publicShop(shop),
+        revenue: performanceByShop.get(String(shop._id))?.revenue || 0,
+        orders: performanceByShop.get(String(shop._id))?.orders || 0,
+        products: performanceByShop.get(String(shop._id))?.products || 0,
+        deliveredOrders: performanceByShop.get(String(shop._id))?.deliveredOrders || 0,
+        pendingOrders: performanceByShop.get(String(shop._id))?.pendingOrders || 0,
+      })),
     });
   } catch (error) {
     next({
@@ -451,7 +477,7 @@ export const getPlatformOverviewController = async (_req, res, next) => {
         .select("shopId status stock createdAt")
         .lean(),
       OrderSchema.find({})
-        .select("fulfillments totalAmount status createdAt")
+        .select("products fulfillments totalAmount status createdAt")
         .sort({ createdAt: -1 })
         .lean(),
       getAllUsers({}),
@@ -515,16 +541,26 @@ export const getShopOverviewController = async (req, res, next) => {
         .sort({ createdAt: -1 })
         .lean(),
       OrderSchema.find({ shopIds: shopId })
-        .select("userId products totalAmount status shippingAddress createdAt updatedAt expectedDeliveryDate")
+        .select("userId products fulfillments shopIds totalAmount status shippingAddress createdAt updatedAt expectedDeliveryDate")
         .sort({ createdAt: -1 })
         .lean(),
     ]);
 
     const publicUsers = users.map(toPublicUser);
     const admins = publicUsers.filter((user) => user.role === "admin" && String(user.shopId || "") === shopId);
-    const shopFulfillments = orders.flatMap((order) =>
-      (order.fulfillments || []).filter((item) => String(item.shopId) === shopId)
-    );
+    const shopFulfillments = orders.flatMap((order) => {
+      const fulfillments = (order.fulfillments || []).filter((item) => String(item.shopId) === shopId);
+      if (fulfillments.length) return fulfillments;
+      const products = (order.products || []).filter((item) => String(item.shopId) === shopId);
+      if (!products.length) return [];
+      return [{
+        shopId,
+        shopName: products[0]?.shopName || shop.name,
+        products,
+        totalAmount: products.reduce((sum, item) => sum + Number(item.totalAmount || (Number(item.price || 0) * Number(item.quantity || 1))), 0),
+        status: order.status,
+      }];
+    });
     const totalRevenue = shopFulfillments.reduce((sum, fulfillment) => sum + Number(fulfillment.totalAmount || 0), 0);
     const inventory = {
       totalProducts: products.length,
@@ -543,7 +579,19 @@ export const getShopOverviewController = async (req, res, next) => {
       cancelledOrders: shopFulfillments.filter((item) => ["cancelled", "canceled"].includes(item.status)).length,
     };
     const shopOrders = orders.map((order) => {
-      const fulfillments = (order.fulfillments || []).filter((item) => String(item.shopId) === shopId);
+      let fulfillments = (order.fulfillments || []).filter((item) => String(item.shopId) === shopId);
+      if (!fulfillments.length) {
+        const products = (order.products || []).filter((item) => String(item.shopId) === shopId);
+        if (products.length) {
+          fulfillments = [{
+            shopId,
+            shopName: products[0]?.shopName || shop.name,
+            products,
+            totalAmount: products.reduce((sum, item) => sum + Number(item.totalAmount || (Number(item.price || 0) * Number(item.quantity || 1))), 0),
+            status: order.status,
+          }];
+        }
+      }
       return {
         ...order,
         fulfillments,
